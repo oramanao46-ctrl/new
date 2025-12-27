@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>For You 🤍</title>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Prompt:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --primary-glow: #ffb7b2;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            /* พื้นหลังไล่สี Midnight Navy ให้ดูแพง */
+            background: linear-gradient(to bottom, #0f0c29, #302b63, #24243e);
+            overflow: hidden;
+            font-family: 'Prompt', sans-serif;
+            width: 100vw; height: 100dvh;
+            touch-action: none; position: fixed;
+            color: white;
+        }
+
+        canvas {
+            display: block; position: absolute; top: 0; left: 0; 
+            z-index: 1; width: 100%; height: 100%;
+            /* ลด Contrast ลงนิดนึงให้ดูนวลตา ไม่แสบตา */
+            filter: saturate(1.2) brightness(1.1);
+        }
+
+        /* --- UI Elements: Glassmorphism Style --- */
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 12, 41, 0.85); /* พื้นหลังโปร่งแสงนิดๆ */
+            backdrop-filter: blur(10px); /* เบลอฉากหลัง */
+            z-index: 999; display: flex; justify-content: center; align-items: center; 
+            flex-direction: column; cursor: pointer; transition: opacity 0.8s ease;
+        }
+        
+        .start-btn {
+            padding: 15px 40px;
+            border: 1px solid var(--glass-border);
+            border-radius: 50px;
+            background: var(--glass-bg);
+            color: white;
+            font-family: 'Prompt', sans-serif;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            animation: pulse 2s infinite;
+        }
+
+        #name-container {
+            position: absolute; top: 12%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            z-index: 10; opacity: 0; pointer-events: none;
+            transition: all 1.2s ease-out; width: 100%; text-align: center;
+        }
+        #name-container.visible { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+        .glowing-text {
+            font-family: 'Dancing Script', cursive;
+            font-size: 3rem; color: #fff;
+            font-weight: 600;
+            /* แสงนีออนแบบ Soft Glow */
+            text-shadow: 0 0 15px rgba(255, 183, 178, 0.6), 0 0 30px rgba(255, 183, 178, 0.4);
+            white-space: nowrap; margin: 0;
+            letter-spacing: 1px;
+        }
+
+        /* --- Minimal Puzzle --- */
+        #puzzle-wrapper {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 30; opacity: 0; pointer-events: none;
+            transition: opacity 0.8s;
+            display: flex; flex-direction: column; align-items: center;
+            width: 90%; max-width: 320px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px; border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(5px);
+        }
+        #puzzle-wrapper.active { opacity: 1; pointer-events: auto; }
+
+        .puzzle-title {
+            color: #eee; margin-bottom: 15px; font-size: 1rem; font-weight: 300;
+            text-align: center; letter-spacing: 0.5px;
+        }
+
+        #puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 4px; /* ช่องว่างระหว่างจิ๊กซอว์ */
+            width: 240px; height: 300px; /* ขนาดกะทัดรัด */
+            background: transparent;
+        }
+
+        .puzzle-piece {
+            background-image: url('photo1.jpg'); 
+            background-size: 240px 300px;
+            cursor: pointer; border-radius: 4px;
+            transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .puzzle-piece.selected {
+            z-index: 10;
+            transform: scale(0.95);
+            box-shadow: 0 0 0 2px #fff, 0 0 15px var(--primary-glow);
+            filter: brightness(1.2);
+        }
+
+        #success-msg-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 40; pointer-events: none; opacity: 0;
+            background: rgba(0,0,0,0.3); backdrop-filter: blur(2px);
+            transition: opacity 0.5s;
+        }
+        .success-card {
+            background: white; color: #333;
+            padding: 20px 40px; border-radius: 50px;
+            font-size: 1.5rem; font-weight: 500;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transform: scale(0.8); transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #success-msg-overlay.show { opacity: 1; }
+        #success-msg-overlay.show .success-card { transform: scale(1); }
+
+
+        /* --- Content Card (Glassmorphism) --- */
+        #content-box {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: auto;
+            min-height: 75%;
+            z-index: 20; display: flex; flex-direction: column;
+            align-items: center; justify-content: flex-start;
+            padding-top: 40px; padding-bottom: 30px;
+            opacity: 0; pointer-events: none;
+            transform: translateY(50px); transition: all 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+            
+            /* Glass Effect Card Styling */
+            background: linear-gradient(to top, rgba(20, 20, 30, 0.95), rgba(40, 40, 60, 0.4));
+            backdrop-filter: blur(8px);
+            border-top-left-radius: 30px;
+            border-top-right-radius: 30px;
+            border-top: 1px solid var(--glass-border);
+        }
+        #content-box.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+        .title-msg { 
+            font-size: 1.3rem; color: #fff; font-weight: 500; margin-bottom: 20px; 
+            letter-spacing: 1px; opacity: 0.9;
+        }
+        
+        .body-msg { 
+            font-size: 0.95rem; color: #e0e0e0; font-weight: 300; 
+            text-align: center; line-height: 1.8; 
+            margin-bottom: 25px; padding: 0 30px; width: 100%; box-sizing: border-box;
+        }
+        
+        /* Polaroid Style Frame */
+        .photo-frame {
+            position: relative; padding: 10px 10px 35px 10px; /* ด้านล่างเยอะหน่อยเหมือนโพลารอยด์ */
+            background: #fff; 
+            box-shadow: 0 5px 25px rgba(0,0,0,0.15); 
+            width: 160px; height: 200px;
+            transform: rotate(-3deg); /* เอียงนิดๆ ให้ดูขี้เล่น */
+            cursor: pointer; transition: transform 0.3s; flex-shrink: 0;
+            margin-bottom: 10px;
+        }
+        .photo-frame:active { transform: rotate(-3deg) scale(0.95); }
+        .couple-photo { width: 100%; height: 100%; object-fit: cover; background: #eee; }
+        
+        .photo-fade-out { opacity: 0; }
+        .click-hint { font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 5px; }
+
+        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); } 70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); } }
+    </style>
+</head>
+<body>
+    <audio id="bg-music" loop><source src="song.mp3" type="audio/mpeg"></audio>
+    
+    <div id="start-screen" onclick="startShow()">
+        <div class="start-btn">Tap to Open 🎁</div>
+        <p style="font-size:0.8rem; margin-top: 15px; opacity: 0.6; font-weight: 300;">(Please turn on sound)</p>
+    </div>
+
+    <div id="flash-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:white;z-index:50;opacity:0;pointer-events:none;transition:opacity 0.8s;"></div>
+    
+    <canvas id="canvas"></canvas>
+
+    <div id="name-container"><h1 class="glowing-text">Manao 💗 Ome</h1></div>
+
+    <div id="puzzle-wrapper">
+        <div class="puzzle-title">Complete the puzzle... 🧩</div>
+        <div id="puzzle-board"></div>
+    </div>
+
+    <div id="success-msg-overlay">
+        <div class="success-card">Perfect! ✨</div>
+    </div>
+
+    <div id="content-box">
+        <div class="title-msg">Happy New Year My Love</div>
+        <div class="body-msg">
+            ขอบคุณปีที่ผ่านมาที่มีเธออยู่ข้างๆ กันเสมอ<br>
+            ไม่ว่าจะเป็นวันที่ดีหรือวันที่เหนื่อย<br>
+            แค่หันมาเห็นเธอ พี่ก็รู้สึกว่าไม่ต้องสู้คนเดียวเลย<br>
+            ขอให้ปีใหม่นี้เป็นอีกปีที่เราจับมือกันแน่นๆ<br>
+            ยิ้มให้กันเยอะๆ และรักกันมากขึ้นทุกวันนะ<br>
+            <br>
+            <span style="font-size: 1rem; font-weight: 500; color: #ffb7b2;">Love You Forever ❤️</span>
+        </div>
+        
+        <div class="photo-frame" onclick="nextPhoto()">
+            <img src="photo1.jpg" id="slideshow-img" class="couple-photo">
+        </div>
+        <div class="click-hint">Tap photo to see more</div>
+    </div>
+
+    <script>
+        // --- Puzzle System ---
+        const puzzleBoard = document.getElementById('puzzle-board');
+        let pieces = []; let selectedPiece = null;
+        const rows = 3, cols = 3; 
+
+        function initPuzzle() {
+            for (let i = 0; i < rows * cols; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'puzzle-piece';
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                piece.style.backgroundPosition = `-${col * (240/3)}px -${row * (300/3)}px`;
+                piece.dataset.index = i;
+                piece.onclick = () => onPieceClick(piece);
+                pieces.push(piece);
+            }
+            shuffle(pieces);
+            pieces.forEach(p => puzzleBoard.appendChild(p));
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function onPieceClick(clickedPiece) {
+            if (selectedPiece === clickedPiece) {
+                clickedPiece.classList.remove('selected'); selectedPiece = null; return;
+            }
+            if (selectedPiece) {
+                const parent = clickedPiece.parentNode;
+                const nextSibling1 = selectedPiece.nextSibling === clickedPiece ? selectedPiece : selectedPiece.nextSibling;
+                puzzleBoard.insertBefore(selectedPiece, clickedPiece);
+                puzzleBoard.insertBefore(clickedPiece, nextSibling1);
+                selectedPiece.classList.remove('selected');
+                selectedPiece = null;
+                checkWin();
+            } else {
+                clickedPiece.classList.add('selected'); selectedPiece = clickedPiece;
+            }
+        }
+
+        function checkWin() {
+            const currentPieces = document.querySelectorAll('.puzzle-piece');
+            let isWin = true;
+            currentPieces.forEach((piece, index) => { if (parseInt(piece.dataset.index) !== index) isWin = false; });
+            if (isWin) {
+                setTimeout(() => {
+                    document.getElementById('puzzle-wrapper').style.opacity = 0;
+                    setTimeout(() => document.getElementById('puzzle-wrapper').style.display = 'none', 800);
+                    const successOverlay = document.getElementById('success-msg-overlay');
+                    successOverlay.classList.add('show');
+                    setTimeout(() => {
+                        successOverlay.style.opacity = 0;
+                        setTimeout(() => {
+                            successOverlay.style.display = 'none';
+                            document.getElementById('content-box').classList.add('visible');
+                        }, 500);
+                    }, 1500);
+                }, 500);
+            }
+        }
+
+        // --- Photo System ---
+        const photoList = ['photo1.jpg', 'photo2.jpg', 'photo3.jpg'];
+        let currentPhotoIndex = 0;
+        const imgElement = document.getElementById('slideshow-img');
+        let isChanging = false;
+        function nextPhoto() {
+            if (isChanging) return; isChanging = true;
+            imgElement.classList.add('photo-fade-out');
+            setTimeout(() => {
+                currentPhotoIndex = (currentPhotoIndex + 1) % photoList.length;
+                imgElement.src = photoList[currentPhotoIndex];
+                imgElement.onload = () => { imgElement.classList.remove('photo-fade-out'); isChanging = false; };
+            }, 500);
+        }
+
+        // --- Fireworks System (Pastel & Minimal) ---
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        let cw, ch;
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            cw = window.innerWidth; ch = window.innerHeight;
+            canvas.width = cw * dpr; canvas.height = ch * dpr;
+            canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
+            ctx.scale(dpr, dpr);
+        }
+        window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+        let fireworks = []; let particles = []; let mode = 0; let timer = 0;
+        // สีพาสเทลน่ารักๆ (Peach, Lavender, Mint, Soft Pink, Sky Blue)
+        const pastelColors = [
+            {h: 350, s: 100, l: 80}, // Pink
+            {h: 200, s: 100, l: 80}, // Blue
+            {h: 40,  s: 100, l: 75}, // Gold
+            {h: 150, s: 100, l: 80}, // Mint
+            {h: 260, s: 100, l: 80}  // Lavender
+        ];
+
+        class Firework {
+            constructor(sx, sy, tx, ty, special) {
+                this.x = sx; this.y = sy; this.sx = sx; this.sy = sy;
+                this.tx = tx; this.ty = ty;
+                this.dist = Math.hypot(tx - sx, ty - sy);
+                this.travel = 0;
+                this.coords = [[sx, sy], [sx, sy]];
+                this.angle = Math.atan2(ty - sy, tx - sx);
+                this.speed = special ? 2.5 : 1.8; this.acc = 1.02;
+                const color = pastelColors[Math.floor(Math.random() * pastelColors.length)];
+                this.hue = color.h; this.sat = color.s; this.light = color.l;
+                this.special = special;
+            }
+            update(i) {
+                this.coords.pop(); this.coords.unshift([this.x, this.y]);
+                this.speed *= this.acc;
+                const vx = Math.cos(this.angle) * this.speed;
+                const vy = Math.sin(this.angle) * this.speed;
+                this.travel = Math.hypot(this.sx - (this.x+vx), this.sy - (this.y+vy));
+                if (this.travel >= this.dist) {
+                    createParticles(this.tx, this.ty, this.special, this.hue, this.sat, this.light);
+                    fireworks.splice(i, 1);
+                    if(this.special) triggerFinale();
+                } else { this.x += vx; this.y += vy; }
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.coords[this.coords.length-1][0], this.coords[this.coords.length-1][1]);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = `hsl(${this.hue}, ${this.sat}%, ${this.light}%)`;
+                ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, special, hue, sat, light) {
+                this.x = x; this.y = y; this.coords = [];
+                let cCount = special ? 6 : 4; while(cCount--) this.coords.push([x, y]);
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * (special ? 15 : 10) + 1; 
+                this.friction = 0.95; this.gravity = 0.5; 
+                this.hue = hue + (Math.random() * 20 - 10); 
+                this.sat = sat; this.light = light;
+                this.alpha = 1; this.decay = Math.random() * 0.008 + 0.005; 
+                this.thickness = Math.random() * 2.5 + 1.5; 
+            }
+            update(i) {
+                this.coords.pop(); this.coords.unshift([this.x, this.y]);
+                this.speed *= this.friction;
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed + this.gravity;
+                this.alpha -= this.decay;
+                if(this.alpha <= this.decay) particles.splice(i, 1);
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(this.coords[this.coords.length-1][0], this.coords[this.coords.length-1][1]);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = `hsla(${this.hue}, ${this.sat}%, ${this.light}%, ${this.alpha})`;
+                ctx.lineWidth = this.thickness; ctx.lineCap = 'round'; ctx.stroke();
+            }
+        }
+
+        function createParticles(x, y, special, hue, sat, light) {
+            let count = special ? 200 : 70;
+            while(count--) particles.push(new Particle(x, y, special, hue, sat, light));
+        }
+
+        function loop() {
+            requestAnimationFrame(loop);
+            // หางยาวและนุ่มนวล
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; ctx.fillRect(0, 0, cw, ch);
